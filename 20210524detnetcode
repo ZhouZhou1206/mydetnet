@@ -14,24 +14,21 @@ import os
 Parameters
 K - size of x
 N - size of y
-snrdb_low - the lower bound of noise db used during training   #训练中使用的噪声分贝的下限
-snr_high - the higher bound of noise db used during training   #训练中使用的噪声分贝的上限
-L - number of layers in DetNet                                 #检测网络的层
-v_size = size of auxiliary variable at each layer              #每层辅助变量的大小
-hl_size - size of hidden layer at each DetNet layer (the dimention the layers input are increased to   #每个监测网络层的隐藏层大小，层的输入尺寸被增加到
-startingLearningRate - the initial step size of the gradient descent algorithm  #开始学习速率，梯度下降算法的开始步长
-decay_factor & decay_step_size - each decay_step_size steps the learning rate decay by decay_factor #衰减因子和衰减步长，每一个衰减步长步进学习速率衰减的decay_factor
-train_iter - number of train iterations   #训练迭代的数目
-train_batch_size - batch size during training phase   #训练阶段的批量大小
-test_iter - number of test iterations                 #测试迭代的数目
-test_batch_size  - batch size during testing phase    #测试阶段的批量大小
+snrdb_low - the lower bound of noise db used during training
+snr_high - the higher bound of noise db used during training
+L - number of layers in DetNet
+v_size = size of auxiliary variable at each layer
+hl_size - size of hidden layer at each DetNet layer (the dimention the layers input are increased to
+startingLearningRate - the initial step size of the gradient descent algorithm
+decay_factor & decay_step_size - each decay_step_size steps the learning rate decay by decay_factor
+train_iter - number of train iterations
+train_batch_size - batch size during training phase
+test_iter - number of test iterations
+test_batch_size  - batch size during testing phase
 LOG_LOSS - equal 1 if loss of each layer should be sumed in proportion to the layer depth, otherwise all losses have the same weight 
-# 如果每一层的损失应按层深的比例计算，则等于1，否则所有损失的权重相同
-res_alpha- the proportion of the previous layer output to be added to the current layers output (view ResNet article)
-                           #要添加到当前层输出的前一层输出的比例
+res_alpha- the proportion of the previuos layer output to be added to the current layers output (view ResNet article)
 snrdb_low_test & snrdb_high_test & num_snr - when testing, num_snr different SNR values will be tested, uniformly spread between snrdb_low_test and snrdb_high_test 
-"""                                                          #测试的时候，num_snr 与 SNR value不同将被测试，在snrdb_low_test and snrdb_high_test之间均匀扩散                                               
-
+"""
 sess = tf.InteractiveSession()  # 能让你在运行图的时候，插入一些计算图，这些计算图是由某些操作(operations)构成的
 tic = tm.time()
 global_tic = tm.time()
@@ -46,47 +43,58 @@ snr_high = 10.0 ** (snrdb_high / 10.0)
 v_size = 2 * K  # 每层辅助变量的大小
 hl_size = 8 * K  # 隐藏层的大小
 startingLearningRate = 0.0001  # 初始学习率
-decay_factor = 0.97    #衰减因子
-decay_step_size = 1000   #衰减步长
+decay_factor = 0.97
+decay_step_size = 1000
 train_iter = 5000  # 训练迭代次数
 train_batch_size = 5000  # 批量大小
-test_iter = 40            #测试通路
-test_batch_size = 1000    #测试批次的大小
+test_iter = 40
+test_batch_size = 1000
 LOG_LOSS = 1  # 残差网络-每一层的损失应按层深的比例计算
 res_alpha = 0.9  # 要添加到当前层输出的之前层输出的 比例
 num_snr = 6  # 要添加到当前层输出的之前层输出的 比例
 snrdb_low_test = 8.0
 snrdb_high_test = 13.0
 
-"""Data generation for train and test phases  为培训和测试阶段生成数据
-In this example, both functions are the same. #在这个例子里所有的函数都一样
+"""Data generation for train and test phases
+In this example, both functions are the same.
 This duplication is in order to easily allow testing cases where the test is over different distributions of data than in the training phase.
-#这种重复是为了方便测试用例，测试是在不同分布的数据上进行的，而不是在训练阶段。
 e.g. training over gaussian i.i.d. channels and testing over a specific constant channel.
-#在高斯独立同分布信道上进行训练，在特定的恒定信道上进行测试
-currently both test and train are over i.i.d gaussian channel.#目前测试和训练都在i.i.d高斯信道上进行。
+currently both test and train are over i.i.d gaussian channel.
 """
 nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 现在
 print("K=", K, "N=", N, "L=", L, "train_iter=", train_iter, "now=", nowTime)
 
 
+#这一部分的代码是生成独立同分布的测试数据集
+#关于np.random.randn(d0,d1,...,dn)函数的笔记。
+#randn函数跟怒给定的维度生成[0,1)之间的数据，包含0不包括1,dn表示每个维度，返回值为指定维度的array
+#比如np.random.rand(4,2)返回的是四行两列的[0,1)之间的随机值；np.random.rand(4,3,2)返回的是四组三行两列的[0,1)之间的随机值
+#numpy.random.uniform功能介绍：从[low,high，size)中随机采样，得到的结果满足均匀分布
+                     #low是采样下限，float类型，默认值为0，high是采样上届，float类型，默认值为1 ，size是输出样本数目为int或元组（tuple）类型
+                     #比如size=（m,n,k）则输出m*n*k个样本，缺省时输出1个值
+                     #返回值：ndarray类型，其形状和参数size中描述一致
+                     #顺便说一下ndarray类型，表示一个N组数组对象，其有一个shape（表维度大小）和dtype（说明数组数据类型的对象）
 def generate_data_iid_test(B, K, N, snr_low, snr_high):  # B为train_batch_size批次数
+                                  #randn返回的是元组，rand返回的是元素
     H_ = np.random.randn(B, N, K)  # 从标准正态分布中随机取值 #B组N*K维随机值
-    W_ = np.zeros([B, K, K])
-    x_ = np.sign(np.random.rand(B, K) - 0.5)  # -0.5到0.5区间的随机值
-   # The sign function returns -1 if x < 0, 0 if x==0, 1 if x > 0.
-    y_ = np.zeros([B, N])
-    w = np.random.randn(B, N)
+                                   #H_返回的随机数组的元组内容是，B训练批次大小，N是y的大小，x是K的大小。
+    W_ = np.zeros([B, K, K])       #返回一个形状为[B,K,K]的全零矩阵
+    x_ = np.sign(np.random.rand(B, K) - 0.5)  # x_取-0.5到0.5区间的随机值
+   # sign（）函数是一个符号函数
+   #The sign function returns -1 if x < 0, 0 if x==0, 1 if x > 0.
+    y_ = np.zeros([B, N])        #y_返回的是形状为[B,N]的全零矩阵
+    w = np.random.randn(B, N)   
     Hy_ = x_ * 0  # 零矩阵
-    HH_ = np.zeros([B, K, K])
-    SNR_ = np.zeros([B])  # B*1组
+    HH_ = np.zeros([B, K, K])#HH_设的是B个K*K的方阵组成的全零数组，b是训练批次，K是x的大小，x是独立且等概率的二进制码元的未知矢量
+    SNR_ = np.zeros([B])  # B*1组   信噪比矩阵初始值设的是和训练批次一样大小的全零矩阵
     for i in range(B):
         SNR = np.random.uniform(low=snr_low, high=snr_high)
         H = H_[i, :, :]
         tmp_snr = (H.T.dot(H)).trace() / K  # H转置乘以H  求对角元素的和再除以K
         H = H / np.sqrt(tmp_snr) * np.sqrt(SNR)  # 压缩了一下
         H_[i, :, :] = H  # 信道矩阵
-        y_[i, :] = (H.dot(x_[i, :]) + w[i, :])  # y_=Hx_+w
+        y_[i, :] = (H.dot(x_[i, :]) + w[i, :])  # y_=Hx_+w  这里是标准线性MIMO模型，
+                                                #y是接收到的矢量，H是通道矩阵，x是独立且等概率的二进制符号的未知矢量
         Hy_[i, :] = H.T.dot(y_[i, :])  # Hy_=H转置*y_
         HH_[i, :, :] = H.T.dot(H_[i, :, :])  # HH_=H转置*H_
         SNR_[i] = SNR
@@ -261,7 +269,7 @@ global_toc = tm.time()
 with open(path, 'a+') as f:
 
     for i in range(len(times)):
-       f.write(f"{snr_list[i]}    {bers[i]}    {berss[i]}    {times[i]} \n",)   
+        f.write(f"{snr_list[i]}     {bers[i]}    {berss[i]}    {times[i]} \n",)
 
 
 print("total coat time: ", global_toc-global_tic)
